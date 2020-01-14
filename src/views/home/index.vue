@@ -1,29 +1,76 @@
 <template>
   <div class="container">
     <van-tabs v-model="activeIndex" swipeable>
-      <van-tab :title="'标签' +  item" v-for="item in 10" :key="item">
-        <!-- 这里注意 这个div设置了滚动条 目的是 给后面做 阅读记忆 留下伏笔 -->
-        <!-- 阅读记忆 => 看文章看到一半 滑到中部 去了别的页面 当你回来时 文章还在你看的位置 -->
-        <div class='scroll-wrapper'>
-          <van-cell-group>
-            <van-cell v-for="obj in 20" :key="obj" :title="item"></van-cell>
-          </van-cell-group>
-        </div>
+      <van-tab :title="channel.name" v-for="channel in channels" :key="channel.id">
+       <!-- 因为一个tab标签 对应一个article-list组件 -->
+       <!-- 如果要监听子组件的事件, 就应该在子组件的标签上写监听 -->
+         <article-list @showAction="openMoreAction" :channel_id="channel.id"></article-list>
       </van-tab>
     </van-tabs>
     <span class="bar_btn">
       <van-icon name="wap-nav" />
     </span>
+    <!-- 放置弹层组件 -->
+    <van-popup  v-model="showMoreAction" :style="{width: '80%'}">
+      <!-- 包裹反馈组件 -->
+      <more-action @dislike="dislike"></more-action>
+    </van-popup>
   </div>
 </template>
 
 <script>
+import ArticleList from './components/article-list'
+import MoreAction from './components/more-action'
+import { getMyChannels } from '@/api/channels'
+import { disLikeArticle } from '@/api/article'
+import eventBus from '@/utils/eventBus'
 export default {
   name: 'home', // devtools查看组件时  可以看到 对应的name名称
   data () {
     return {
-      activeIndex: 0 // 默认启动第0 个标签
+      activeIndex: 0, // 默认启动第0 个标签
+      channels: [], // 声明接收频道的数据
+      showMoreAction: false, // 用来控制显示反馈弹层
+      articleId: null // 用来接收文章id
     }
+  },
+  components: {
+    ArticleList, MoreAction
+  },
+  methods: {
+    async  getMyChannels () {
+      // 获取频道列表数据
+      let data = await getMyChannels()
+      this.channels = data.channels // 将频道赋值给声明的变量
+    },
+    // 监听子组件触发的事件 打开弹层
+    openMoreAction (artId) {
+      // 打开弹层
+      this.showMoreAction = true
+      this.articleId = artId // 接收 不喜欢文章的id
+    },
+    // 调用不喜欢的文章的接口
+    async dislike () {
+      try {
+        await disLikeArticle({ target: this.articleId })
+        this.$gnotify({
+          type: 'success',
+          message: '操作成功'
+        })
+        // 触发一个事件  发出一个广播 听到广播的文章列表 去删除对应的数据
+        // 文章id 频道id
+        eventBus.$emit('delArticle', this.articleId, this.channels[this.activeIndex].id)
+        this.showMoreAction = false // 关闭弹层
+      } catch (error) {
+        this.$gnotify({
+          type: 'danger',
+          message: '操作失败'
+        })
+      }
+    }
+  },
+  created () {
+    this.getMyChannels() // 获取频道
   }
 }
 </script>
